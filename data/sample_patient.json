@@ -1,0 +1,13 @@
+{
+  "patient_id": "ICU-7734",
+  "heart_rate": 118,
+  "systolic_bp": 88,
+  "diastolic_bp": 55,
+  "respiratory_rate": 24,
+  "spo2": 88,
+  "temperature": 38.9,
+  "gcs_score": 12,
+  "lactate": 4.2,
+  "hours_in_icu": 18,
+  "age": 67
+}

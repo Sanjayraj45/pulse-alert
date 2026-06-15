@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PulseAlert — ICU Monitor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Inter',sans-serif;background:#f1f5f9;color:#1e293b;min-height:100vh;display:flex;flex-direction:column}
+
+    /* ── Header ── */
+    header{
+      background:#fff;border-bottom:1px solid #e2e8f0;
+      padding:0 24px;height:60px;
+      display:flex;align-items:center;justify-content:space-between;
+      position:sticky;top:0;z-index:200;
+      box-shadow:0 1px 4px rgba(0,0,0,0.06)
+    }
+    .h-left{display:flex;align-items:center;gap:10px}
+    .h-logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#ef4444,#b91c1c);display:flex;align-items:center;justify-content:center;font-size:17px}
+    .h-title{font-size:16px;font-weight:700;color:#0f172a}
+    .h-sub{font-size:11px;color:#94a3b8}
+    .h-right{display:flex;align-items:center;gap:8px}
+    .h-clock{font-size:13px;font-weight:600;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;padding:5px 12px;border-radius:8px}
+    .h-ws{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:500}
+    .ws-on{background:#f0fdf4;border:1px solid #86efac;color:#15803d}
+    .ws-off{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b}
+    .wsdot{width:7px;height:7px;border-radius:50%;animation:blink 2s infinite}
+    .wsdot-on{background:#22c55e}
+    .wsdot-off{background:#ef4444}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+    /* ── Layout ── */
+    .layout{display:flex;flex:1;overflow:hidden;height:calc(100vh - 60px)}
+
+    /* ── Sidebar ── */
+    .sidebar{
+      width:280px;flex-shrink:0;background:#fff;
+      border-right:1px solid #e2e8f0;
+      display:flex;flex-direction:column;
+      overflow:hidden
+    }
+    .sb-header{padding:16px;border-bottom:1px solid #f1f5f9}
+    .sb-title{font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px}
+    .sb-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .sb-stat{background:#f8fafc;border-radius:8px;padding:10px 12px;text-align:center}
+    .sb-stat-num{font-size:20px;font-weight:700}
+    .sb-stat-lbl{font-size:10px;color:#94a3b8;margin-top:1px}
+    .sn-total{color:#3b82f6}
+    .sn-alert{color:#ef4444}
+    .sn-critical{color:#dc2626}
+    .sn-stable{color:#22c55e}
+
+    .sb-patients{flex:1;overflow-y:auto;padding:10px}
+    .sb-card{
+      border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;
+      border:1.5px solid #e2e8f0;background:#fff;
+      transition:all .15s
+    }
+    .sb-card:hover{border-color:#cbd5e1;background:#f8fafc}
+    .sb-card.active{border-color:#3b82f6;background:#eff6ff}
+    .sb-card.alert-active{border-color:#ef4444!important;background:#fef2f2!important}
+    .sb-card-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+    .sb-avatar{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0}
+    .av-c{background:linear-gradient(135deg,#ef4444,#b91c1c)}
+    .av-h{background:linear-gradient(135deg,#f97316,#c2410c)}
+    .av-m{background:linear-gradient(135deg,#eab308,#a16207)}
+    .av-l{background:linear-gradient(135deg,#22c55e,#15803d)}
+    .sb-name{font-size:13px;font-weight:600;color:#1e293b;flex:1}
+    .sb-pid{font-size:10px;color:#94a3b8}
+    .sb-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px}
+    .bd-CRITICAL{background:#fef2f2;color:#dc2626;border:1px solid #fca5a5}
+    .bd-HIGH{background:#fff7ed;color:#c2410c;border:1px solid #fdba74}
+    .bd-MEDIUM{background:#fefce8;color:#a16207;border:1px solid #fde047}
+    .bd-LOW{background:#f0fdf4;color:#15803d;border:1px solid #86efac}
+    .sb-score-row{display:flex;align-items:center;gap:8px}
+    .sb-score{font-size:16px;font-weight:800}
+    .sc-CRITICAL{color:#dc2626}
+    .sc-HIGH{color:#ea580c}
+    .sc-MEDIUM{color:#ca8a04}
+    .sc-LOW{color:#16a34a}
+    .sb-bar-bg{flex:1;background:#f1f5f9;border-radius:4px;height:5px;overflow:hidden}
+    .sb-bar-fill{height:5px;border-radius:4px;transition:width .8s ease}
+    .sbr-CRITICAL{background:#ef4444}
+    .sbr-HIGH{background:#f97316}
+    .sbr-MEDIUM{background:#eab308}
+    .sbr-LOW{background:#22c55e}
+    .sb-vitals{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+    .sb-vital-chip{font-size:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:2px 7px;color:#475569}
+    .sb-vital-chip.danger{background:#fef2f2;border-color:#fca5a5;color:#dc2626}
+    .sb-vital-chip.warn{background:#fff7ed;border-color:#fdba74;color:#c2410c}
+
+    /* ── Main content ── */
+    .content{flex:1;overflow-y:auto;padding:20px}
+
+    /* Welcome screen */
+    .welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;color:#94a3b8}
+    .welcome-icon{font-size:48px;margin-bottom:16px}
+    .welcome-title{font-size:16px;font-weight:600;color:#64748b;margin-bottom:6px}
+    .welcome-sub{font-size:13px}
+
+    /* Detail view */
+    .detail{display:none}
+
+    /* Detail header */
+    .det-header{background:#fff;border-radius:16px;padding:20px 24px;margin-bottom:16px;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between}
+    .det-left{display:flex;align-items:center;gap:16px}
+    .det-avatar{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff}
+    .det-name{font-size:18px;font-weight:700;color:#0f172a}
+    .det-meta{font-size:12px;color:#94a3b8;margin-top:3px}
+    .det-badge{padding:6px 16px;border-radius:20px;font-size:13px;font-weight:700;letter-spacing:.04em}
+    .dbd-CRITICAL{background:#fef2f2;color:#dc2626;border:1.5px solid #fca5a5}
+    .dbd-HIGH{background:#fff7ed;color:#c2410c;border:1.5px solid #fdba74}
+    .dbd-MEDIUM{background:#fefce8;color:#a16207;border:1.5px solid #fde047}
+    .dbd-LOW{background:#f0fdf4;color:#15803d;border:1.5px solid #86efac}
+
+    /* Risk section */
+    .det-risk{background:#fff;border-radius:16px;padding:20px 24px;margin-bottom:16px;border:1px solid #e2e8f0}
+    .det-risk-top{display:flex;align-items:center;gap:20px;margin-bottom:12px}
+    .det-score{font-size:52px;font-weight:800;line-height:1}
+    .det-score-info{flex:1}
+    .det-score-lbl{font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+    .det-bar-bg{background:#f1f5f9;border-radius:8px;height:12px;overflow:hidden}
+    .det-bar-fill{height:12px;border-radius:8px;transition:width 1s ease}
+    .dbf-CRITICAL{background:linear-gradient(90deg,#fca5a5,#ef4444)}
+    .dbf-HIGH{background:linear-gradient(90deg,#fdba74,#f97316)}
+    .dbf-MEDIUM{background:linear-gradient(90deg,#fde047,#eab308)}
+    .dbf-LOW{background:linear-gradient(90deg,#86efac,#22c55e)}
+    .det-action{margin-top:14px;padding:12px 16px;border-radius:10px;font-size:13px;font-weight:500;display:flex;gap:8px}
+    .da-CRITICAL{background:#fef2f2;color:#dc2626;border-left:3px solid #ef4444}
+    .da-HIGH{background:#fff7ed;color:#c2410c;border-left:3px solid #f97316}
+    .da-MEDIUM{background:#fefce8;color:#a16207;border-left:3px solid #eab308}
+    .da-LOW{background:#f0fdf4;color:#15803d;border-left:3px solid #22c55e}
+
+    /* Vitals grid */
+    .det-vitals{background:#fff;border-radius:16px;padding:20px 24px;margin-bottom:16px;border:1px solid #e2e8f0}
+    .det-section-title{font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:14px}
+    .vitals-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .vbox{background:#f8fafc;border-radius:10px;padding:12px 14px;border:1px solid #f1f5f9}
+    .vbox.danger{background:#fef2f2;border-color:#fca5a5}
+    .vbox.warn{background:#fff7ed;border-color:#fdba74}
+    .vbox-lbl{font-size:10px;color:#94a3b8;font-weight:500;margin-bottom:4px}
+    .vbox-val{font-size:18px;font-weight:700;color:#1e293b}
+    .vbox.danger .vbox-val{color:#dc2626}
+    .vbox.warn .vbox-val{color:#c2410c}
+    .vbox-unit{font-size:10px;font-weight:400;color:#94a3b8;margin-left:2px}
+    .vbox-trend{font-size:10px;margin-top:3px}
+
+    /* Two col */
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+
+    /* Factors */
+    .det-factors{background:#fff;border-radius:16px;padding:20px 24px;border:1px solid #e2e8f0}
+    .factor-list{}
+    .fitem{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f8fafc}
+    .fitem:last-child{border-bottom:none}
+    .ficon{font-size:16px;width:24px;text-align:center}
+    .fname{flex:1;font-size:13px;font-weight:500;color:#374151}
+    .fval{font-size:12px;color:#94a3b8;min-width:44px;text-align:right}
+    .fbadge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px}
+    .fb-HIGH{background:#fef2f2;color:#dc2626}
+    .fb-MEDIUM{background:#fff7ed;color:#c2410c}
+    .fb-LOW{background:#f0fdf4;color:#15803d}
+
+    /* Summary */
+    .det-summary{background:#fff;border-radius:16px;padding:20px 24px;border:1px solid #e2e8f0}
+    .summary-text{font-size:13px;color:#64748b;line-height:1.8}
+
+    /* Alert log */
+    .alert-log-section{background:#fff;border-radius:16px;padding:20px 24px;border:1px solid #e2e8f0;margin-top:16px}
+    .log-list{max-height:180px;overflow-y:auto}
+    .litem{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid #f8fafc}
+    .litem:last-child{border-bottom:none}
+    .ldot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px}
+    .lmsg{font-size:12px;font-weight:500;color:#374151}
+    .ltime{font-size:11px;color:#94a3b8;margin-top:2px}
+    .lempty{font-size:12px;color:#94a3b8;text-align:center;padding:20px}
+
+    /* Timestamp footer */
+    .det-footer{font-size:11px;color:#94a3b8;text-align:right;margin-top:8px;display:flex;align-items:center;justify-content:flex-end;gap:6px}
+    .live-pulse{width:6px;height:6px;border-radius:50%;background:#22c55e;animation:blink 1.5s infinite}
+
+    /* Connecting */
+    .connecting{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center}
+    .spin{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#ef4444;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .spin-text{font-size:13px;color:#94a3b8}
+
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-track{background:#f8fafc}
+    ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="h-left">
+    <div class="h-logo">🚨</div>
+    <div>
+      <div class="h-title">PulseAlert</div>
+      <div class="h-sub">ICU Early Warning System</div>
+    </div>
+  </div>
+  <div class="h-right">
+    <div class="h-clock" id="clock">--:--:--</div>
+    <div class="h-ws ws-off" id="ws_badge">
+      <div class="wsdot wsdot-off" id="wsdot"></div>
+      <span id="ws_label">Connecting...</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sb-header">
+      <div class="sb-title">ICU Ward</div>
+      <div class="sb-stats">
+        <div class="sb-stat"><div class="sb-stat-num sn-total" id="st_total">0</div><div class="sb-stat-lbl">Patients</div></div>
+        <div class="sb-stat"><div class="sb-stat-num sn-alert" id="st_alerts">0</div><div class="sb-stat-lbl">Alerts</div></div>
+        <div class="sb-stat"><div class="sb-stat-num sn-critical" id="st_critical">0</div><div class="sb-stat-lbl">Critical</div></div>
+        <div class="sb-stat"><div class="sb-stat-num sn-stable" id="st_stable">0</div><div class="sb-stat-lbl">Stable</div></div>
+      </div>
+    </div>
+    <div class="sb-patients" id="sb_patients">
+      <div class="connecting" style="height:200px">
+        <div class="spin"></div>
+        <div class="spin-text">Connecting...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="content" id="content">
+    <div class="welcome">
+      <div class="welcome-icon">🏥</div>
+      <div class="welcome-title">Select a patient to view details</div>
+      <div class="welcome-sub">Live monitoring active — updates every 10 seconds</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const patients = {}
+  const alertLog = []
+  let selectedPid = null
+  let totalUpdates = 0
+
+  const factorIcons = {
+    d1_lactate_max:'🧪', d1_lactate_min:'🧪', high_lactate_flag:'🧪',
+    d1_spo2_min:'💨', d1_spo2_max:'💨',
+    d1_sysbp_min:'💉', d1_sysbp_max:'💉', d1_diasbp_min:'💉',
+    d1_heartrate_max:'❤️', d1_heartrate_min:'❤️',
+    gcs_motor_apache:'🧠', gcs_eyes_apache:'🧠', gcs_verbal_apache:'🧠', gcs_total:'🧠',
+    apache_4a_icu_death_prob:'📊', apache_4a_hospital_death_prob:'📊',
+    shock_index:'⚡', age_group:'👤', age:'👤',
+    diabetes_mellitus:'🩸', d1_resprate_max:'🌬️',
+    d1_creatinine_max:'🔬', bun_creatinine_ratio:'🔬',
+    d1_bun_max:'🔬', d1_temp_max:'🌡️'
+  }
+
+  const levelColors = {CRITICAL:'#dc2626', HIGH:'#f97316', MEDIUM:'#eab308', LOW:'#22c55e'}
+
+  function initials(name){ return name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase() }
+
+  function vClass(key, val){
+    const d = {spo2:90, systolic_bp:90, lactate:4, heart_rate:120}
+    const w = {spo2:94, systolic_bp:100, lactate:2, heart_rate:100}
+    if(d[key] && val < d[key]) return 'danger'
+    if(w[key] && val < w[key]) return 'warn'
+    if(key==='lactate' && val > 4) return 'danger'
+    if(key==='lactate' && val > 2) return 'warn'
+    if(key==='heart_rate' && val > 120) return 'danger'
+    if(key==='heart_rate' && val > 100) return 'warn'
+    return ''
+  }
+
+  // ── Clock ──
+  setInterval(()=>{
+    document.getElementById('clock').textContent =
+      new Date().toLocaleTimeString('en-IN',{hour12:false})
+  }, 1000)
+
+  // ── WebSocket ──
+  function connect(){
+    const ws = new WebSocket('ws://localhost:8000/ws')
+    ws.onopen = ()=>{
+      const b = document.getElementById('ws_badge')
+      b.className = 'h-ws ws-on'
+      document.getElementById('wsdot').className = 'wsdot wsdot-on'
+      document.getElementById('ws_label').textContent = 'Live'
+    }
+    ws.onmessage = e => {
+      const d = JSON.parse(e.data)
+      if(d.type === 'patient_update') onUpdate(d)
+    }
+    ws.onclose = ()=>{
+      const b = document.getElementById('ws_badge')
+      b.className = 'h-ws ws-off'
+      document.getElementById('wsdot').className = 'wsdot wsdot-off'
+      document.getElementById('ws_label').textContent = 'Reconnecting...'
+      setTimeout(connect, 3000)
+    }
+    ws.onerror = ()=> ws.close()
+  }
+
+  function onUpdate(d){
+    patients[d.patient_id] = d
+    totalUpdates++
+    if(d.alert){
+      alertLog.unshift({...d, logged_at: new Date().toLocaleTimeString('en-IN',{hour12:false})})
+      if(alertLog.length > 30) alertLog.pop()
+    }
+    renderSidebar()
+    updateStats()
+    if(selectedPid === d.patient_id) renderDetail(d)
+  }
+
+  // ── Stats ──
+  function updateStats(){
+    const vals = Object.values(patients)
+    document.getElementById('st_total').textContent = vals.length
+    document.getElementById('st_alerts').textContent = vals.filter(p=>p.alert).length
+    document.getElementById('st_critical').textContent = vals.filter(p=>p.risk_level==='CRITICAL').length
+    document.getElementById('st_stable').textContent = vals.filter(p=>p.risk_level==='LOW').length
+  }
+
+  // ── Sidebar ──
+  function renderSidebar(){
+    const sorted = Object.values(patients).sort((a,b)=>b.risk_score-a.risk_score)
+    if(!sorted.length) return
+
+    const html = sorted.map(d=>{
+      const lvl = d.risk_level
+      const sc = Math.round(d.risk_score*100)
+      const v = d.vitals
+      const avCls = {CRITICAL:'av-c',HIGH:'av-h',MEDIUM:'av-m',LOW:'av-l'}[lvl]
+      const isActive = selectedPid === d.patient_id
+      const isAlert = d.alert
+
+      const chips = [
+        {label:`HR ${v.heart_rate}`, key:'heart_rate', val:v.heart_rate},
+        {label:`SpO2 ${v.spo2}%`, key:'spo2', val:v.spo2},
+        {label:`BP ${v.systolic_bp}`, key:'systolic_bp', val:v.systolic_bp},
+        {label:`Lac ${v.lactate}`, key:'lactate', val:v.lactate},
+      ].map(c=>`<span class="sb-vital-chip ${vClass(c.key,c.val)}">${c.label}</span>`).join('')
+
+      return `
+        <div class="sb-card ${isActive?'active':''} ${isAlert&&!isActive?'alert-active':''}"
+             onclick="selectPatient('${d.patient_id}')">
+          <div class="sb-card-top">
+            <div class="sb-avatar ${avCls}">${initials(d.name)}</div>
+            <div style="flex:1">
+              <div class="sb-name">${d.name}</div>
+              <div class="sb-pid">${d.patient_id} · Age ${d.age}</div>
+            </div>
+            <div class="sb-badge bd-${lvl}">${lvl}</div>
+          </div>
+          <div class="sb-score-row">
+            <div class="sb-score sc-${lvl}">${sc}%</div>
+            <div class="sb-bar-bg">
+              <div class="sb-bar-fill sbr-${lvl}" style="width:${sc}%"></div>
+            </div>
+          </div>
+          <div class="sb-vitals">${chips}</div>
+        </div>`
+    }).join('')
+
+    document.getElementById('sb_patients').innerHTML = html
+  }
+
+  // ── Select patient ──
+  function selectPatient(pid){
+    selectedPid = pid
+    renderSidebar()
+    if(patients[pid]) renderDetail(patients[pid])
+  }
+
+  // ── Detail view ──
+  function renderDetail(d){
+    const lvl = d.risk_level
+    const sc = Math.round(d.risk_score*100)
+    const v = d.vitals
+    const avCls = {CRITICAL:'av-c',HIGH:'av-h',MEDIUM:'av-m',LOW:'av-l'}[lvl]
+
+    const vitalBoxes = [
+      {label:'Heart Rate', key:'heart_rate', val:v.heart_rate, unit:'bpm'},
+      {label:'Systolic BP', key:'systolic_bp', val:v.systolic_bp, unit:'mmHg'},
+      {label:'SpO2', key:'spo2', val:v.spo2, unit:'%'},
+      {label:'Lactate', key:'lactate', val:v.lactate, unit:'mmol/L'},
+      {label:'Resp Rate', key:'resp_rate', val:v.resp_rate, unit:'/min'},
+      {label:'Temperature', key:'temp', val:v.temperature, unit:'°C'},
+    ].map(vb=>{
+      const cls = vClass(vb.key, vb.val)
+      return `
+        <div class="vbox ${cls}">
+          <div class="vbox-lbl">${vb.label}</div>
+          <div class="vbox-val">${vb.val}<span class="vbox-unit">${vb.unit}</span></div>
+        </div>`
+    }).join('')
+
+    const factors = d.top_risk_factors.map(f=>`
+      <div class="fitem">
+        <span class="ficon">${factorIcons[f.feature]||'📌'}</span>
+        <span class="fname">${f.feature.replace(/_/g,' ')}</span>
+        <span class="fval">${f.value}</span>
+        <span class="fbadge fb-${f.impact}">${f.impact}</span>
+      </div>`).join('')
+
+    const logItems = alertLog.filter(l=>l.patient_id===d.patient_id).slice(0,8)
+    const logHtml = logItems.length
+      ? logItems.map(l=>`
+          <div class="litem">
+            <div class="ldot" style="background:${levelColors[l.risk_level]}"></div>
+            <div>
+              <div class="lmsg">Risk ${Math.round(l.risk_score*100)}% — ${l.risk_level}</div>
+              <div class="ltime">${l.logged_at} · ${l.recommended_action}</div>
+            </div>
+          </div>`).join('')
+      : '<div class="lempty">No alerts for this patient</div>'
+
+    const html = `
+      <div class="detail" style="display:block">
+
+        <!-- Patient header -->
+        <div class="det-header">
+          <div class="det-left">
+            <div class="det-avatar ${avCls}">${initials(d.name)}</div>
+            <div>
+              <div class="det-name">${d.name}</div>
+              <div class="det-meta">${d.patient_id} · Age ${d.age} · ${d.alert?'🔴 Alert Active':'🟢 Monitoring'}</div>
+            </div>
+          </div>
+          <div class="det-badge dbd-${lvl}">${lvl}</div>
+        </div>
+
+        <!-- Risk score -->
+        <div class="det-risk">
+          <div class="det-risk-top">
+            <div class="det-score sc-${lvl}">${sc}%</div>
+            <div class="det-score-info" style="flex:1">
+              <div class="det-score-lbl">Deterioration Risk Score</div>
+              <div class="det-bar-bg">
+                <div class="det-bar-fill dbf-${lvl}" style="width:${sc}%"></div>
+              </div>
+            </div>
+          </div>
+          <div class="det-action da-${lvl}">
+            <span>${d.alert?'⚡':'ℹ️'}</span>
+            <span>${d.recommended_action}</span>
+          </div>
+        </div>
+
+        <!-- Vitals -->
+        <div class="det-vitals">
+          <div class="det-section-title">Live Vitals</div>
+          <div class="vitals-grid">${vitalBoxes}</div>
+        </div>
+
+        <!-- Two col: factors + summary -->
+        <div class="two-col">
+          <div class="det-factors">
+            <div class="det-section-title">Top Risk Factors</div>
+            <div class="factor-list">${factors}</div>
+          </div>
+          <div class="det-summary">
+            <div class="det-section-title">Clinical Summary</div>
+            <div class="summary-text">${d.nurse_summary || 'Generating summary...'}</div>
+          </div>
+        </div>
+
+        <!-- Alert log -->
+        <div class="alert-log-section">
+          <div class="det-section-title">Alert History</div>
+          <div class="log-list">${logHtml}</div>
+        </div>
+
+        <!-- Footer -->
+        <div class="det-footer">
+          <div class="live-pulse"></div>
+          Last updated ${d.timestamp}
+        </div>
+
+      </div>`
+
+    document.getElementById('content').innerHTML = html
+  }
+
+  connect()
+</script>
+</body>
+</html>
