@@ -17,7 +17,31 @@ feature_names = joblib.load(os.path.join(BASE_DIR, 'data', 'feature_names.pkl'))
 def engineer_features(data: dict) -> pd.DataFrame:
     """Engineer the same features we created in notebook 02"""
     df = pd.DataFrame([data])
-    
+
+    # Encode categorical text columns if present (raw WiDS CSV has text labels)
+    gender_map = {'M': 1, 'F': 0, 'Male': 1, 'Female': 0}
+    icu_type_map = {
+        'CTICU': 0, 'CCU-CTICU': 1, 'Cardiac ICU': 2, 'Med-Surg ICU': 3,
+        'MICU': 4, 'Neuro ICU': 5, 'SICU': 6
+    }
+    icu_admit_map = {
+        'Accident & Emergency': 0, 'Floor': 1, 'Operating Room / Recovery': 2,
+        'Other Hospital': 3, 'Other ICU': 4
+    }
+
+    if 'gender' in df.columns and df['gender'].dtype == object:
+        df['gender'] = df['gender'].map(gender_map).fillna(0)
+
+    if 'icu_type' in df.columns and df['icu_type'].dtype == object:
+        df['icu_type'] = df['icu_type'].map(icu_type_map).fillna(0)
+
+    if 'icu_admit_source' in df.columns and df['icu_admit_source'].dtype == object:
+        df['icu_admit_source'] = df['icu_admit_source'].map(icu_admit_map).fillna(0)
+
+    # Force numeric conversion as a safety net for any remaining text columns
+    for col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
     # Engineered features
     df['shock_index'] = df['d1_heartrate_max'] / df['d1_sysbp_min'].replace(0, np.nan)
     df['pulse_pressure'] = df['d1_sysbp_max'] - df['d1_diasbp_min']
@@ -29,13 +53,14 @@ def engineer_features(data: dict) -> pd.DataFrame:
     df['bun_creatinine_ratio'] = df['d1_bun_max'] / df['d1_creatinine_max'].replace(0, np.nan)
     df['age_group'] = pd.cut(df['age'], bins=[0, 40, 60, 75, 100], labels=[0, 1, 2, 3]).astype(float)
     df['high_lactate_flag'] = (df['d1_lactate_max'] > 2.0).astype(int)
-    
+
     # Fill any NaN
     df = df.fillna(df.median(numeric_only=True))
-    
+    df = df.fillna(0)
+
     # Reorder columns to match training
     df = df[feature_names]
-    
+
     return df
 
 def get_risk_level(risk_score: float) -> str:
@@ -61,44 +86,44 @@ def get_recommended_action(risk_level: str) -> str:
 
 def predict(patient: PatientInput) -> PredictionOutput:
     """Main prediction function"""
-    
+
     # Convert input to dict (exclude patient_id)
     patient_dict = patient.dict()
     patient_id = patient_dict.pop('patient_id')
-    
+
     # Engineer features
     X = engineer_features(patient_dict)
-    
+
     # Get risk score
     risk_score = float(xgb_model.predict_proba(X)[:, 1][0])
     risk_level = get_risk_level(risk_score)
     alert = risk_score >= optimal_threshold
-    
+
     # Get SHAP values
     shap_values = shap_explainer.shap_values(X)
     shap_series = pd.Series(shap_values[0], index=feature_names)
     top_shap = shap_series.abs().sort_values(ascending=False).head(5)
-    
+
     # Build top risk factors
     top_risk_factors = []
     for feature in top_shap.index:
         shap_val = shap_series[feature]
         abs_val = abs(shap_val)
-        
+
         if abs_val > 0.3:
             impact = "HIGH"
         elif abs_val > 0.1:
             impact = "MEDIUM"
         else:
             impact = "LOW"
-        
+
         top_risk_factors.append(RiskFactor(
             feature=feature,
             impact=impact,
             value=round(float(X[feature].values[0]), 2),
             shap_value=round(float(shap_val), 4)
         ))
-    
+
     return PredictionOutput(
         patient_id=patient_id,
         risk_score=round(risk_score, 4),
