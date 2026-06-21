@@ -86,11 +86,15 @@ async def process_one_tick():
     top_factors = []
     for f in top_shap.index:
         sv = shap_series[f]
-        impact = 'HIGH' if abs(sv) > 0.3 else 'MEDIUM' if abs(sv) > 0.1 else 'LOW'
+        abs_sv = abs(sv)
+        # Thresholds calibrated from real SHAP value percentiles (~90th / ~75th)
+        impact = 'HIGH' if abs_sv > 0.22 else 'MEDIUM' if abs_sv > 0.10 else 'LOW'
+        direction = 'increases risk' if sv > 0 else 'decreases risk'
         top_factors.append({
             'feature': f,
             'impact': impact,
-            'value': round(float(X[f].values[0]), 2)
+            'value': round(float(X[f].values[0]), 2),
+            'direction': direction
         })
 
     action_map = {

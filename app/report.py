@@ -1,4 +1,5 @@
 import io
+import json
 from datetime import datetime
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
@@ -25,7 +26,6 @@ def generate_trend_chart_image(trend_rows):
     if not trend_rows:
         return None
 
-    timestamps = [r['timestamp'] for r in trend_rows]
     scores = [round(r['risk_score'] * 100, 1) for r in trend_rows]
 
     fig, ax = plt.subplots(figsize=(6.5, 2.8))
@@ -107,15 +107,26 @@ def generate_patient_report(patient_id: str) -> bytes:
     story.append(Paragraph("Recommended Action", heading_style))
     story.append(Paragraph(latest['recommended_action'], body_style))
 
-    # Top risk factors
+    # Top risk factors (reading from top_factors_json, includes direction)
     story.append(Paragraph("Top Risk Factors (SHAP)", heading_style))
-    factor_rows = [['Feature', 'Value']]
-    for col in ['top_factor_1', 'top_factor_2', 'top_factor_3']:
-        val = latest.get(col)
-        if val:
-            factor_rows.append([val.replace('_', ' ').title(), '—'])
+    factor_rows = [['Feature', 'Value', 'Impact', 'Direction']]
+
+    factors_json = latest.get('top_factors_json')
+    if factors_json:
+        try:
+            factors = json.loads(factors_json)
+            for f in factors[:5]:
+                factor_rows.append([
+                    f.get('feature', '').replace('_', ' ').title(),
+                    str(f.get('value', '—')),
+                    f.get('impact', '—'),
+                    f.get('direction', '—')
+                ])
+        except Exception:
+            pass
+
     if len(factor_rows) > 1:
-        ft = Table(factor_rows, colWidths=[4*inch, 1.7*inch])
+        ft = Table(factor_rows, colWidths=[2.3*inch, 1*inch, 1*inch, 1.4*inch])
         ft.setStyle(TableStyle([
             ('FONTSIZE', (0,0), (-1,-1), 10),
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#f1f5f9')),

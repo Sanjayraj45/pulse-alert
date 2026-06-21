@@ -1,6 +1,7 @@
 import mysql.connector
 from mysql.connector import pooling
 import os
+import json
 from datetime import datetime
 
 # MySQL connection config — update password if different
@@ -43,10 +44,17 @@ def init_db():
             top_factor_1 VARCHAR(100),
             top_factor_2 VARCHAR(100),
             top_factor_3 VARCHAR(100),
+            top_factors_json TEXT,
             recommended_action TEXT,
             source VARCHAR(20) DEFAULT 'manual'
         )
     ''')
+
+    # Add the new column if the table already existed from before this update
+    try:
+        cursor.execute('ALTER TABLE predictions ADD COLUMN top_factors_json TEXT')
+    except Exception:
+        pass  # column already exists, safe to ignore
 
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS patients (
@@ -76,14 +84,15 @@ def save_prediction(patient_id: str, result: dict, vitals: dict, source: str = '
     f1 = factors[0]['feature'] if len(factors) > 0 else ''
     f2 = factors[1]['feature'] if len(factors) > 1 else ''
     f3 = factors[2]['feature'] if len(factors) > 2 else ''
+    factors_json = json.dumps(factors)
 
     cursor.execute('''
         INSERT INTO predictions (
             patient_id, timestamp, risk_score, risk_level, alert,
             heart_rate, systolic_bp, spo2, lactate, resp_rate, temperature, age,
-            top_factor_1, top_factor_2, top_factor_3,
+            top_factor_1, top_factor_2, top_factor_3, top_factors_json,
             recommended_action, source
-        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     ''', (
         patient_id, now,
         result['risk_score'], result['risk_level'], int(result['alert']),
@@ -91,7 +100,7 @@ def save_prediction(patient_id: str, result: dict, vitals: dict, source: str = '
         vitals.get('spo2'), vitals.get('lactate'),
         vitals.get('resp_rate'), vitals.get('temperature'),
         vitals.get('age'),
-        f1, f2, f3,
+        f1, f2, f3, factors_json,
         result['recommended_action'], source
     ))
 
