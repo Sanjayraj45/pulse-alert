@@ -2,279 +2,763 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>PulseAlert — Live ICU Monitor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PulseAlert — ICU Early Warning System</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Arial,sans-serif;background:#f1f5f9;color:#1e293b;padding:20px}
-.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-.header h1{font-size:22px}
-.live-badge{display:flex;align-items:center;gap:6px;background:#fef2f2;color:#991b1b;border:1px solid #fca5a5;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600}
-.live-badge.connected{background:#f0fdf4;color:#15803d;border-color:#86efac}
-.dot{width:7px;height:7px;border-radius:50%;background:#ef4444;animation:blink 1.5s infinite}
-.dot.on{background:#22c55e}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+  :root {
+    --bg:        #F7F8FA;
+    --surface:   #FFFFFF;
+    --border:    #E4E7ED;
+    --border-2:  #CDD2DB;
+    --text-1:    #0F1923;
+    --text-2:    #4A5568;
+    --text-3:    #8A94A6;
+    --mono:      'IBM Plex Mono', monospace;
+    --sans:      'Inter', sans-serif;
 
-.box{background:#fff;border-radius:12px;padding:20px;margin-bottom:16px;border:1px solid #ddd;max-width:1000px}
-input[type=file]{margin:10px 0}
-button{background:#3b82f6;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:14px;margin-right:8px}
-button:disabled{background:#cbd5e1;cursor:not-allowed}
-.btn-pause{background:#f59e0b}
-.btn-reset{background:#64748b}
-.btn-report{background:#22c55e}
+    --critical:  #C0392B;
+    --critical-bg: #FEF2F0;
+    --critical-border: #F5C6C2;
+    --high:      #D35400;
+    --high-bg:   #FEF6F0;
+    --high-border: #F5D5B8;
+    --medium:    #B7770D;
+    --medium-bg: #FEFBF0;
+    --medium-border: #F5E8B0;
+    --low:       #1A7A4A;
+    --low-bg:    #F0FBF4;
+    --low-border: #A8DFBF;
 
-.progress-row{display:flex;align-items:center;gap:12px;margin-top:14px}
-.progress-bar-bg{flex:1;background:#f1f5f9;border-radius:6px;height:10px;overflow:hidden}
-.progress-bar-fill{height:10px;background:linear-gradient(90deg,#3b82f6,#2563eb);border-radius:6px;transition:width .5s ease;width:0%}
-.progress-text{font-size:13px;color:#64748b;min-width:90px}
+    --blue:      #2563EB;
+    --blue-bg:   #EFF6FF;
+  }
 
-.patient-card{display:none}
-.pc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.pc-name{font-size:18px;font-weight:700}
-.pc-meta{font-size:12px;color:#94a3b8;margin-top:3px}
-.badge{padding:6px 16px;border-radius:18px;font-size:13px;font-weight:700}
-.b-CRITICAL{background:#fef2f2;color:#dc2626;border:1.5px solid #fca5a5}
-.b-HIGH{background:#fff7ed;color:#c2410c;border:1.5px solid #fdba74}
-.b-MEDIUM{background:#fefce8;color:#a16207;border:1.5px solid #fde047}
-.b-LOW{background:#f0fdf4;color:#15803d;border:1.5px solid #86efac}
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-.risk-row{display:flex;align-items:center;gap:18px;margin-bottom:12px}
-.risk-num{font-size:46px;font-weight:800}
-.rn-CRITICAL{color:#dc2626}.rn-HIGH{color:#ea580c}.rn-MEDIUM{color:#ca8a04}.rn-LOW{color:#16a34a}
-.risk-bar-bg{flex:1;background:#f1f5f9;border-radius:8px;height:10px;overflow:hidden}
-.risk-bar-fill{height:10px;border-radius:8px;transition:width 1s ease}
-.rb-CRITICAL{background:#ef4444}.rb-HIGH{background:#f97316}.rb-MEDIUM{background:#eab308}.rb-LOW{background:#22c55e}
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text-1);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
 
-.action-box{margin-top:10px;padding:12px 14px;border-radius:9px;font-size:13px;font-weight:500}
-.ab-CRITICAL{background:#fef2f2;color:#dc2626;border-left:3px solid #ef4444}
-.ab-HIGH{background:#fff7ed;color:#c2410c;border-left:3px solid #f97316}
-.ab-MEDIUM{background:#fefce8;color:#a16207;border-left:3px solid #eab308}
-.ab-LOW{background:#f0fdf4;color:#15803d;border-left:3px solid #22c55e}
+  /* ── Header ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-mark {
+    width: 32px; height: 32px;
+    background: var(--critical);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+  }
+  .header-name { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+  .header-dept { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .ws-pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 20px;
+    font-size: 11px; font-weight: 600;
+    background: #FEF2F0; color: #991B1B;
+    border: 1px solid var(--critical-border);
+    transition: all .3s;
+  }
+  .ws-pill.on { background: var(--low-bg); color: var(--low); border-color: var(--low-border); }
+  .ws-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--critical);
+    animation: pulse-dot 2s infinite;
+  }
+  .ws-pill.on .ws-dot { background: var(--low); }
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .clock {
+    font-family: var(--mono);
+    font-size: 12px; font-weight: 500;
+    color: var(--text-2);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 5px 12px; border-radius: 6px;
+  }
 
-.vitals-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
-.vbox{background:#f8fafc;border-radius:9px;padding:12px 14px;border:1px solid #f1f5f9}
-.vbox.danger{background:#fef2f2;border-color:#fca5a5}
-.vbox.warn{background:#fff7ed;border-color:#fdba74}
-.vbox-lbl{font-size:10px;color:#94a3b8;margin-bottom:3px}
-.vbox-val{font-size:18px;font-weight:700}
-.vbox.danger .vbox-val{color:#dc2626}
-.vbox.warn .vbox-val{color:#c2410c}
+  /* ── Layout ── */
+  .app { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 56px); }
 
-.chart-wrap{height:200px;margin-top:16px}
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 300px; flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-head {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-head-top {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .section-eyebrow {
+    font-size: 10px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--text-3);
+  }
+  .stat-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
+  .stat-box {
+    background: var(--bg); border-radius: 8px;
+    padding: 8px 6px; text-align: center;
+  }
+  .stat-num { font-size: 17px; font-weight: 700; line-height: 1; }
+  .stat-lbl { font-size: 9px; color: var(--text-3); margin-top: 3px; text-transform: uppercase; letter-spacing: .05em; }
+  .s-blue { color: var(--blue); }
+  .s-crit { color: var(--critical); }
+  .s-high { color: var(--high); }
+  .s-low  { color: var(--low); }
 
-.section-label{font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px}
+  .sidebar-body { flex: 1; overflow-y: auto; padding: 10px; }
 
-.factor-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px}
-.factor-row:last-child{border-bottom:none}
-.factor-name{flex:1;color:#374151}
-.factor-val{color:#94a3b8}
-.factor-pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px}
-.fp-HIGH{background:#fef2f2;color:#dc2626}
-.fp-MEDIUM{background:#fff7ed;color:#c2410c}
-.fp-LOW{background:#f0fdf4;color:#15803d}
+  /* patient card in sidebar */
+  .pt-card {
+    border-radius: 10px; padding: 12px 14px;
+    margin-bottom: 6px; cursor: pointer;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .pt-card:hover { border-color: var(--border-2); box-shadow: 0 1px 6px rgba(0,0,0,.06); }
+  .pt-card.selected { border-color: var(--blue); background: var(--blue-bg); }
+  .pt-card.alerting {
+    border-color: var(--critical-border);
+    background: var(--critical-bg);
+    animation: card-pulse 2.5s infinite;
+  }
+  @keyframes card-pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(192,57,43,0); }
+    50%      { box-shadow: 0 0 0 4px rgba(192,57,43,.12); }
+  }
+  .ptc-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .ptc-av {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0;
+  }
+  .av-crit { background: var(--critical); }
+  .av-high { background: var(--high); }
+  .av-med  { background: var(--medium); }
+  .av-low  { background: var(--low); }
+  .ptc-name { font-size: 12px; font-weight: 600; flex: 1; }
+  .ptc-id   { font-size: 10px; color: var(--text-3); }
+  .risk-badge {
+    font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
+    letter-spacing: .04em;
+  }
+  .rb-CRITICAL { background: var(--critical-bg); color: var(--critical); border: 1px solid var(--critical-border); }
+  .rb-HIGH     { background: var(--high-bg);     color: var(--high);     border: 1px solid var(--high-border); }
+  .rb-MEDIUM   { background: var(--medium-bg);   color: var(--medium);   border: 1px solid var(--medium-border); }
+  .rb-LOW      { background: var(--low-bg);       color: var(--low);      border: 1px solid var(--low-border); }
 
-.summary-text{font-size:13px;color:#64748b;line-height:1.7;margin-top:10px;background:#f8fafc;padding:12px;border-radius:8px}
+  .ptc-score-row { display: flex; align-items: center; gap: 8px; }
+  .ptc-score { font-family: var(--mono); font-size: 15px; font-weight: 500; min-width: 40px; }
+  .sc-CRITICAL { color: var(--critical); }
+  .sc-HIGH     { color: var(--high); }
+  .sc-MEDIUM   { color: var(--medium); }
+  .sc-LOW      { color: var(--low); }
+  .mini-bar { flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .mini-fill { height: 3px; border-radius: 2px; transition: width .8s ease; }
+  .mf-CRITICAL { background: var(--critical); }
+  .mf-HIGH     { background: var(--high); }
+  .mf-MEDIUM   { background: var(--medium); }
+  .mf-LOW      { background: var(--low); }
+  .ptc-vitals { display: flex; gap: 4px; margin-top: 7px; flex-wrap: wrap; }
+  .vital-chip {
+    font-size: 9px; padding: 2px 6px; border-radius: 5px;
+    background: var(--bg); border: 1px solid var(--border); color: var(--text-2);
+  }
+  .vital-chip.warn { background: var(--high-bg); border-color: var(--high-border); color: var(--high); }
+  .vital-chip.danger { background: var(--critical-bg); border-color: var(--critical-border); color: var(--critical); }
 
-.alert-log{max-height:200px;overflow-y:auto;margin-top:10px}
-.log-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px}
-.log-dot{width:8px;height:8px;border-radius:50%;margin-top:3px;flex-shrink:0}
+  /* empty sidebar state */
+  .sidebar-empty {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 8px; padding: 30px; text-align: center;
+  }
+  .sidebar-empty .icon { font-size: 32px; opacity: .4; }
+  .sidebar-empty p { font-size: 12px; color: var(--text-3); line-height: 1.5; }
+
+  /* ── Main content ── */
+  .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+  /* Upload panel */
+  .upload-panel {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 28px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .upload-label { font-size: 13px; font-weight: 600; color: var(--text-1); white-space: nowrap; }
+  .file-pick {
+    display: flex; align-items: center; gap: 8px;
+    border: 1.5px dashed var(--border-2); border-radius: 8px;
+    padding: 7px 14px; cursor: pointer; transition: border-color .2s;
+    background: var(--bg);
+  }
+  .file-pick:hover { border-color: var(--blue); }
+  .file-pick span { font-size: 12px; color: var(--text-3); }
+  .file-pick span.chosen { color: var(--text-1); font-weight: 500; }
+  #fileInput { display: none; }
+  .btn {
+    padding: 8px 18px; border-radius: 7px; border: none;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    font-family: var(--sans); transition: opacity .15s;
+  }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary { background: var(--blue); color: #fff; }
+  .btn-primary:hover:not(:disabled) { opacity: .88; }
+  .btn-warn  { background: #F59E0B; color: #fff; }
+  .btn-warn:hover:not(:disabled) { opacity: .88; }
+  .btn-ghost { background: var(--bg); color: var(--text-2); border: 1px solid var(--border); }
+  .btn-ghost:hover:not(:disabled) { border-color: var(--border-2); }
+  .btn-danger { background: var(--critical); color: #fff; }
+  .btn-danger:hover:not(:disabled) { opacity: .88; }
+
+  .progress-wrap { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 200px; }
+  .prog-bar { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .prog-fill {
+    height: 6px; border-radius: 3px; width: 0%;
+    background: linear-gradient(90deg, var(--blue), #60A5FA);
+    transition: width .5s ease;
+  }
+  .prog-text { font-family: var(--mono); font-size: 11px; color: var(--text-2); white-space: nowrap; }
+  .status-text { font-size: 12px; color: var(--text-2); }
+
+  /* ── Detail area ── */
+  .detail { flex: 1; padding: 22px 28px; }
+
+  /* welcome */
+  .welcome {
+    height: 100%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px; text-align: center; padding: 40px;
+  }
+  .welcome-icon { font-size: 56px; opacity: .2; }
+  .welcome h2 { font-size: 18px; font-weight: 600; color: var(--text-2); }
+  .welcome p  { font-size: 13px; color: var(--text-3); line-height: 1.6; max-width: 360px; }
+
+  /* ── Patient detail ── */
+  .det-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 20px; gap: 16px;
+  }
+  .det-id-block { display: flex; align-items: center; gap: 12px; }
+  .det-av {
+    width: 44px; height: 44px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700; color: #fff;
+  }
+  .det-name { font-size: 18px; font-weight: 700; letter-spacing: -.3px; }
+  .det-meta { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+  .det-badge {
+    padding: 6px 16px; border-radius: 20px;
+    font-size: 12px; font-weight: 700; letter-spacing: .04em;
+    border: 1.5px solid;
+  }
+  .db-CRITICAL { background: var(--critical-bg); color: var(--critical); border-color: var(--critical-border); }
+  .db-HIGH     { background: var(--high-bg);     color: var(--high);     border-color: var(--high-border); }
+  .db-MEDIUM   { background: var(--medium-bg);   color: var(--medium);   border-color: var(--medium-border); }
+  .db-LOW      { background: var(--low-bg);       color: var(--low);      border-color: var(--low-border); }
+
+  /* Risk score hero */
+  .risk-hero {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px 24px;
+    margin-bottom: 16px;
+    display: flex; align-items: center; gap: 24px;
+  }
+  .risk-score-block { text-align: center; flex-shrink: 0; }
+  .risk-score-num {
+    font-family: var(--mono); font-size: 56px; font-weight: 500;
+    line-height: 1; letter-spacing: -2px;
+    transition: color .5s;
+  }
+  .risk-score-num.pulsing { animation: score-pulse 1.5s infinite; }
+  @keyframes score-pulse { 0%,100%{opacity:1} 50%{opacity:.7} }
+  .risk-score-lbl { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: .08em; margin-top: 4px; }
+  .rn-CRITICAL { color: var(--critical); }
+  .rn-HIGH     { color: var(--high); }
+  .rn-MEDIUM   { color: var(--medium); }
+  .rn-LOW      { color: var(--low); }
+  .risk-right { flex: 1; }
+  .risk-bar-wrap { margin-bottom: 12px; }
+  .risk-bar-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .risk-bar-fill { height: 8px; border-radius: 4px; transition: width 1s ease; }
+  .rbf-CRITICAL { background: linear-gradient(90deg, #E74C3C, var(--critical)); }
+  .rbf-HIGH     { background: linear-gradient(90deg, #F39C12, var(--high)); }
+  .rbf-MEDIUM   { background: linear-gradient(90deg, #F1C40F, var(--medium)); }
+  .rbf-LOW      { background: linear-gradient(90deg, #2ECC71, var(--low)); }
+  .action-strip {
+    padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 500;
+    display: flex; align-items: center; gap: 8px; margin-top: 10px;
+    border-left: 3px solid;
+  }
+  .as-CRITICAL { background: var(--critical-bg); color: var(--critical); border-color: var(--critical); }
+  .as-HIGH     { background: var(--high-bg);     color: var(--high);     border-color: var(--high); }
+  .as-MEDIUM   { background: var(--medium-bg);   color: var(--medium);   border-color: var(--medium); }
+  .as-LOW      { background: var(--low-bg);       color: var(--low);      border-color: var(--low); }
+
+  /* Two col */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+  /* Card */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+  }
+  .card-title {
+    font-size: 10px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--text-3); margin-bottom: 14px;
+  }
+
+  /* Vitals grid */
+  .vitals-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+  .v-box {
+    background: var(--bg); border-radius: 8px;
+    padding: 10px 12px; border: 1px solid var(--border);
+  }
+  .v-box.warn   { background: var(--high-bg);     border-color: var(--high-border); }
+  .v-box.danger { background: var(--critical-bg); border-color: var(--critical-border); }
+  .v-lbl { font-size: 9px; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+  .v-val { font-family: var(--mono); font-size: 18px; font-weight: 500; color: var(--text-1); }
+  .v-box.warn   .v-val { color: var(--high); }
+  .v-box.danger .v-val { color: var(--critical); }
+  .v-unit { font-size: 10px; color: var(--text-3); font-family: var(--sans); margin-left: 2px; font-weight: 400; }
+
+  /* SHAP factors */
+  .factor-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid var(--bg);
+    font-size: 12px;
+  }
+  .factor-row:last-child { border-bottom: none; }
+  .f-name { flex: 1; color: var(--text-1); font-weight: 500; }
+  .f-val  { font-family: var(--mono); font-size: 11px; color: var(--text-3); min-width: 44px; text-align: right; }
+  .f-pill {
+    font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 5px;
+    letter-spacing: .04em;
+  }
+  .fp-HIGH   { background: var(--critical-bg); color: var(--critical); }
+  .fp-MEDIUM { background: var(--high-bg);     color: var(--high); }
+  .fp-LOW    { background: var(--low-bg);       color: var(--low); }
+  .f-dir { font-size: 9px; color: var(--text-3); white-space: nowrap; }
+  .f-dir.up   { color: var(--critical); }
+  .f-dir.down { color: var(--low); }
+
+  /* Chart */
+  .chart-wrap { height: 180px; position: relative; }
+
+  /* Summary */
+  .summary-text {
+    font-size: 12px; color: var(--text-2); line-height: 1.8;
+    background: var(--bg); padding: 12px; border-radius: 8px;
+  }
+
+  /* Alert log */
+  .alert-log { max-height: 200px; overflow-y: auto; }
+  .log-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 9px 0; border-bottom: 1px solid var(--bg); font-size: 11px;
+  }
+  .log-row:last-child { border-bottom: none; }
+  .log-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+  .log-msg { font-weight: 500; color: var(--text-1); }
+  .log-sub { color: var(--text-3); margin-top: 2px; }
+  .log-badge { margin-left: auto; flex-shrink: 0; }
+  .log-empty { font-size: 12px; color: var(--text-3); text-align: center; padding: 20px; }
+
+  /* Report button */
+  .report-btn-wrap { margin-top: 16px; display: flex; justify-content: flex-end; }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <h1>🚨 PulseAlert — Live ICU Monitor</h1>
-  <div class="live-badge" id="wsBadge"><div class="dot" id="wsDot"></div><span id="wsLabel">Connecting...</span></div>
-</div>
-
-<div class="box">
-  <h3>Load Patient for Live Monitoring</h3>
-  <p style="font-size:13px;color:#94a3b8;margin:6px 0">Upload a CSV with multiple time-point readings for ONE patient. System will replay readings automatically.</p>
-  <input type="file" id="fileInput" accept=".csv">
-  <br>
-  <button onclick="loadPlayer()" id="loadBtn">Load & Start Monitoring</button>
-  <button class="btn-pause" onclick="pausePlayer()" id="pauseBtn" disabled>Pause</button>
-  <button onclick="resumePlayer()" id="resumeBtn" disabled>Resume</button>
-  <button class="btn-reset" onclick="resetPlayer()" id="resetBtn" disabled>Reset</button>
-  <p id="status" style="margin-top:10px;font-size:13px;color:#64748b"></p>
-
-  <div class="progress-row" id="progressRow" style="display:none">
-    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
-    <div class="progress-text" id="progressText">Reading 0 / 0</div>
-  </div>
-</div>
-
-<div class="box patient-card" id="patientCard">
-  <div class="pc-header">
+<!-- Header -->
+<header class="header">
+  <div class="header-left">
+    <div class="header-mark">🚨</div>
     <div>
-      <div class="pc-name" id="pcName">—</div>
-      <div class="pc-meta" id="pcMeta">—</div>
-    </div>
-    <div class="badge" id="pcBadge">—</div>
-  </div>
-
-  <div class="risk-row">
-    <div class="risk-num" id="riskNum">—</div>
-    <div style="flex:1">
-      <div style="font-size:11px;color:#94a3b8;margin-bottom:6px">Deterioration Risk Score</div>
-      <div class="risk-bar-bg"><div class="risk-bar-fill" id="riskBar" style="width:0%"></div></div>
+      <div class="header-name">PulseAlert</div>
+      <div class="header-dept">ICU Early Warning System</div>
     </div>
   </div>
+  <div class="header-right">
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="ws-pill" id="wsPill">
+      <div class="ws-dot"></div>
+      <span id="wsLabel">Connecting</span>
+    </div>
+  </div>
+</header>
 
-  <div class="action-box" id="actionBox"></div>
+<div class="app">
 
-  <div class="vitals-grid" id="vitalsGrid"></div>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <div class="sidebar-head-top">
+        <span class="section-eyebrow">ICU Ward</span>
+      </div>
+      <div class="stat-row">
+        <div class="stat-box"><div class="stat-num s-blue" id="st-total">0</div><div class="stat-lbl">Total</div></div>
+        <div class="stat-box"><div class="stat-num s-crit" id="st-alerts">0</div><div class="stat-lbl">Alerts</div></div>
+        <div class="stat-box"><div class="stat-num s-crit" id="st-crit">0</div><div class="stat-lbl">Critical</div></div>
+        <div class="stat-box"><div class="stat-num s-low"  id="st-stable">0</div><div class="stat-lbl">Stable</div></div>
+      </div>
+    </div>
+    <div class="sidebar-body" id="sidebarBody">
+      <div class="sidebar-empty">
+        <div class="icon">🏥</div>
+        <p>Load a patient CSV to begin live monitoring.</p>
+      </div>
+    </div>
+  </aside>
 
-  <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+  <!-- Main -->
+  <main class="main">
 
-  <div class="section-label">Top Risk Factors (SHAP)</div>
-  <div id="factorsBox"></div>
+    <!-- Upload bar -->
+    <div class="upload-panel">
+      <span class="upload-label">Live Monitor</span>
 
-  <div class="summary-text" id="summaryText"></div>
+      <div class="file-pick" onclick="document.getElementById('fileInput').click()">
+        <span>📂</span>
+        <span id="fileLabel">Choose patient CSV</span>
+      </div>
+      <input type="file" id="fileInput" accept=".csv" onchange="onFileChosen(event)">
 
-  <button class="btn-report" onclick="downloadReport()" id="reportBtn" style="margin-top:16px">📄 Download PDF Report</button>
-</div>
+      <button class="btn btn-primary" id="loadBtn" onclick="loadPlayer()">Load & Start</button>
+      <button class="btn btn-warn"    id="pauseBtn" onclick="pausePlayer()" disabled>Pause</button>
+      <button class="btn btn-ghost"   id="resumeBtn" onclick="resumePlayer()" disabled>Resume</button>
+      <button class="btn btn-danger"  id="resetBtn" onclick="resetPlayer()" disabled>Reset</button>
 
-<div class="box" id="alertLogBox" style="display:none">
-  <h3>Alert Log</h3>
-  <div class="alert-log" id="alertLog"></div>
+      <div class="progress-wrap" id="progressWrap" style="display:none">
+        <div class="prog-bar"><div class="prog-fill" id="progFill"></div></div>
+        <span class="prog-text" id="progText">0 / 0</span>
+      </div>
+
+      <span class="status-text" id="statusText"></span>
+    </div>
+
+    <!-- Detail -->
+    <div class="detail" id="detailArea">
+      <div class="welcome">
+        <div class="welcome-icon">📡</div>
+        <h2>No patient loaded</h2>
+        <p>Upload a multi-row CSV with one patient's vitals across time. PulseAlert will replay each reading live through the XGBoost model and broadcast risk scores in real time.</p>
+      </div>
+    </div>
+
+  </main>
 </div>
 
 <script>
 let ws = null
 let chart = null
-let lastPatientId = null
+let lastPid = null
+const patients = {}
+const alerts = []
 const chartData = { labels: [], scores: [] }
-const alertLog = []
-const levelColors = {CRITICAL:'#dc2626',HIGH:'#f97316',MEDIUM:'#eab308',LOW:'#22c55e'}
 
-function connectWS(){
+const LC = {
+  CRITICAL: 'var(--critical)', HIGH: 'var(--high)',
+  MEDIUM: 'var(--medium)', LOW: 'var(--low)'
+}
+
+// Clock
+setInterval(() => {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleTimeString('en-IN', { hour12: false })
+}, 1000)
+
+// File chosen
+function onFileChosen(e) {
+  const f = e.target.files[0]
+  const lbl = document.getElementById('fileLabel')
+  lbl.textContent = f ? f.name : 'Choose patient CSV'
+  lbl.className = f ? 'chosen' : ''
+}
+
+// WebSocket
+function connect() {
   ws = new WebSocket('ws://localhost:8000/ws')
   ws.onopen = () => {
-    document.getElementById('wsBadge').classList.add('connected')
-    document.getElementById('wsDot').classList.add('on')
+    const p = document.getElementById('wsPill')
+    p.classList.add('on')
     document.getElementById('wsLabel').textContent = 'Live'
   }
-  ws.onmessage = (e) => {
+  ws.onmessage = e => {
     const d = JSON.parse(e.data)
-    if(d.type === 'patient_update' && d.reading_number !== undefined){
-      renderPatient(d)
-    }
+    if (d.type === 'patient_update') onUpdate(d)
   }
   ws.onclose = () => {
-    document.getElementById('wsBadge').classList.remove('connected')
-    document.getElementById('wsDot').classList.remove('on')
-    document.getElementById('wsLabel').textContent = 'Reconnecting...'
-    setTimeout(connectWS, 3000)
+    document.getElementById('wsPill').classList.remove('on')
+    document.getElementById('wsLabel').textContent = 'Reconnecting'
+    setTimeout(connect, 3000)
+  }
+  ws.onerror = () => ws.close()
+}
+
+function onUpdate(d) {
+  patients[d.patient_id] = d
+  if (d.alert) {
+    alerts.unshift({ ...d, logged: new Date().toLocaleTimeString('en-IN', { hour12: false }) })
+    if (alerts.length > 30) alerts.pop()
+  }
+  renderSidebar()
+  updateStats()
+  if (d.reading_number !== undefined) {
+    lastPid = d.patient_id
+    renderDetail(d)
+    // progress
+    const pct = Math.round((d.reading_number / d.total_readings) * 100)
+    document.getElementById('progFill').style.width = pct + '%'
+    document.getElementById('progText').textContent = `${d.reading_number} / ${d.total_readings}`
+    if (d.reading_number >= d.total_readings) {
+      document.getElementById('statusText').textContent = 'Monitoring complete.'
+      document.getElementById('pauseBtn').disabled = true
+      document.getElementById('resumeBtn').disabled = true
+    }
   }
 }
 
-function vClass(key, val){
-  if(key==='spo2' && val<90) return 'danger'
-  if(key==='spo2' && val<94) return 'warn'
-  if(key==='systolic_bp' && val<90) return 'danger'
-  if(key==='systolic_bp' && val<100) return 'warn'
-  if(key==='lactate' && val>4) return 'danger'
-  if(key==='lactate' && val>2) return 'warn'
-  if(key==='heart_rate' && val>120) return 'danger'
-  if(key==='heart_rate' && val>100) return 'warn'
+function updateStats() {
+  const vs = Object.values(patients)
+  document.getElementById('st-total').textContent  = vs.length
+  document.getElementById('st-alerts').textContent = vs.filter(p => p.alert).length
+  document.getElementById('st-crit').textContent   = vs.filter(p => p.risk_level === 'CRITICAL').length
+  document.getElementById('st-stable').textContent = vs.filter(p => p.risk_level === 'LOW').length
+}
+
+function vClass(k, v) {
+  if (k === 'spo2'       && v < 90) return 'danger'
+  if (k === 'spo2'       && v < 94) return 'warn'
+  if (k === 'systolic_bp'&& v < 90) return 'danger'
+  if (k === 'systolic_bp'&& v < 100) return 'warn'
+  if (k === 'lactate'    && v > 4)  return 'danger'
+  if (k === 'lactate'    && v > 2)  return 'warn'
+  if (k === 'heart_rate' && v > 120) return 'danger'
+  if (k === 'heart_rate' && v > 100) return 'warn'
   return ''
 }
 
-function renderPatient(d){
-  document.getElementById('patientCard').style.display = 'block'
-  document.getElementById('alertLogBox').style.display = 'block'
-  lastPatientId = d.patient_id
+function initials(s) {
+  return (s || '??').split(/[-_ ]/).map(w => w[0]).join('').slice(0, 2).toUpperCase()
+}
 
-  const lvl = d.risk_level
-  const sc = Math.round(d.risk_score * 100)
-  const v = d.vitals
+function avClass(lvl) {
+  return { CRITICAL: 'av-crit', HIGH: 'av-high', MEDIUM: 'av-med', LOW: 'av-low' }[lvl] || 'av-low'
+}
 
-  document.getElementById('pcName').textContent = d.patient_id
-  document.getElementById('pcMeta').textContent = `Age ${d.age} · Reading ${d.reading_number} of ${d.total_readings} · ${d.alert ? '🔴 Alert Active' : '🟢 Monitoring'}`
-  document.getElementById('pcBadge').textContent = lvl
-  document.getElementById('pcBadge').className = 'badge b-' + lvl
+function renderSidebar() {
+  const sorted = Object.values(patients).sort((a, b) => b.risk_score - a.risk_score)
+  if (!sorted.length) return
+  document.getElementById('sidebarBody').innerHTML = sorted.map(d => {
+    const lvl = d.risk_level, sc = Math.round(d.risk_score * 100)
+    const v = d.vitals || {}
+    const chips = [
+      { l: `HR ${v.heart_rate}`, k: 'heart_rate', v: v.heart_rate },
+      { l: `SpO2 ${v.spo2}%`,    k: 'spo2',       v: v.spo2 },
+      { l: `BP ${v.systolic_bp}`,k: 'systolic_bp', v: v.systolic_bp },
+      { l: `Lac ${v.lactate}`,   k: 'lactate',     v: v.lactate }
+    ].map(c => `<span class="vital-chip ${vClass(c.k, c.v)}">${c.l}</span>`).join('')
+    const sel = lastPid === d.patient_id ? 'selected' : ''
+    const ale = d.alert && lastPid !== d.patient_id ? 'alerting' : ''
+    return `
+      <div class="pt-card ${sel} ${ale}" onclick="selectPatient('${d.patient_id}')">
+        <div class="ptc-top">
+          <div class="ptc-av ${avClass(lvl)}">${initials(d.name || d.patient_id)}</div>
+          <div style="flex:1">
+            <div class="ptc-name">${d.name || d.patient_id}</div>
+            <div class="ptc-id">${d.patient_id} · Age ${d.age || '—'}</div>
+          </div>
+          <span class="risk-badge rb-${lvl}">${lvl}</span>
+        </div>
+        <div class="ptc-score-row">
+          <span class="ptc-score sc-${lvl}">${sc}%</span>
+          <div class="mini-bar"><div class="mini-fill mf-${lvl}" style="width:${sc}%"></div></div>
+        </div>
+        <div class="ptc-vitals">${chips}</div>
+      </div>`
+  }).join('')
+}
 
-  document.getElementById('riskNum').textContent = sc + '%'
-  document.getElementById('riskNum').className = 'risk-num rn-' + lvl
-  document.getElementById('riskBar').style.width = sc + '%'
-  document.getElementById('riskBar').className = 'risk-bar-fill rb-' + lvl
+function selectPatient(pid) {
+  lastPid = pid
+  renderSidebar()
+  if (patients[pid]) renderDetail(patients[pid])
+  fetchTrend(pid)
+}
 
-  document.getElementById('actionBox').textContent = d.recommended_action
-  document.getElementById('actionBox').className = 'action-box ab-' + lvl
+async function fetchTrend(pid) {
+  try {
+    const r = await fetch(`http://localhost:8000/patients/${pid}/trend`)
+    const d = await r.json()
+    if (d.trend && d.trend.length > 1) rebuildChart(d.trend.map(t => ({
+      label: String(t.timestamp).split(' ')[1]?.slice(0, 5) || '',
+      score: Math.round(t.risk_score * 100)
+    })))
+  } catch (e) {}
+}
+
+function renderDetail(d) {
+  const lvl = d.risk_level, sc = Math.round(d.risk_score * 100)
+  const v = d.vitals || {}, facs = d.top_risk_factors || []
 
   const vboxes = [
-    {l:'Heart Rate', k:'heart_rate', v:v.heart_rate, u:'bpm'},
-    {l:'Systolic BP', k:'systolic_bp', v:v.systolic_bp, u:'mmHg'},
-    {l:'SpO2', k:'spo2', v:v.spo2, u:'%'},
-    {l:'Lactate', k:'lactate', v:v.lactate, u:'mmol/L'},
-    {l:'Resp Rate', k:'resp_rate', v:v.resp_rate, u:'/min'},
-    {l:'Temperature', k:'temperature', v:v.temperature, u:'°C'}
+    { l: 'Heart Rate',  k: 'heart_rate',  v: v.heart_rate,  u: 'bpm' },
+    { l: 'Systolic BP', k: 'systolic_bp', v: v.systolic_bp, u: 'mmHg' },
+    { l: 'SpO₂',        k: 'spo2',        v: v.spo2,        u: '%' },
+    { l: 'Lactate',     k: 'lactate',     v: v.lactate,     u: 'mmol/L' },
+    { l: 'Resp Rate',   k: 'resp_rate',   v: v.resp_rate,   u: '/min' },
+    { l: 'Temperature', k: 'temp',        v: v.temperature, u: '°C' }
   ].map(b => `
-    <div class="vbox ${vClass(b.k, b.v)}">
-      <div class="vbox-lbl">${b.l}</div>
-      <div class="vbox-val">${b.v}<span style="font-size:10px;font-weight:400"> ${b.u}</span></div>
+    <div class="v-box ${typeof b.v === 'number' ? vClass(b.k, b.v) : ''}">
+      <div class="v-lbl">${b.l}</div>
+      <div class="v-val">${b.v ?? '—'}<span class="v-unit">${b.u}</span></div>
     </div>`).join('')
-  document.getElementById('vitalsGrid').innerHTML = vboxes
 
-  // SHAP factors
-  const factors = d.top_risk_factors || []
-  const factorsHtml = factors.map(f => `
-    <div class="factor-row">
-      <span class="factor-name">${f.feature.replace(/_/g,' ')}</span>
-      <span class="factor-val">${f.value}</span>
-      <span class="factor-pill fp-${f.impact}">${f.impact}</span>
-    </div>`).join('')
-  document.getElementById('factorsBox').innerHTML = factorsHtml || '<div style="font-size:12px;color:#94a3b8">No factor data available</div>'
+  const factorRows = facs.map(f => {
+    const dirClass = f.direction === 'increases risk' ? 'up' : 'down'
+    const dirIcon  = f.direction === 'increases risk' ? '↑' : '↓'
+    return `
+      <div class="factor-row">
+        <span class="f-name">${f.feature.replace(/_/g, ' ')}</span>
+        <span class="f-val">${f.value}</span>
+        <span class="f-pill fp-${f.impact}">${f.impact}</span>
+        <span class="f-dir ${dirClass}">${dirIcon} ${f.direction}</span>
+      </div>`
+  }).join('') || '<div class="log-empty">No factor data</div>'
 
-  document.getElementById('summaryText').textContent = d.nurse_summary || ''
+  const recentAlerts = alerts.filter(a => a.patient_id === d.patient_id).slice(0, 8)
+  const alertRows = recentAlerts.map(a => `
+    <div class="log-row">
+      <div class="log-dot" style="background:${LC[a.risk_level]}"></div>
+      <div style="flex:1">
+        <div class="log-msg">${a.logged} — ${Math.round(a.risk_score * 100)}% risk</div>
+        <div class="log-sub">${a.recommended_action}</div>
+      </div>
+      <span class="risk-badge rb-${a.risk_level} log-badge">${a.risk_level}</span>
+    </div>`).join('') || '<div class="log-empty">No alerts yet for this patient</div>'
 
-  // Progress bar
-  const pct = Math.round((d.reading_number / d.total_readings) * 100)
-  document.getElementById('progressFill').style.width = pct + '%'
-  document.getElementById('progressText').textContent = `Reading ${d.reading_number} / ${d.total_readings}`
-
-  // Chart
-  chartData.labels.push(d.timestamp)
-  chartData.scores.push(sc)
-  updateChart()
-
-  // Alert log
-  if(d.alert){
-    alertLog.unshift(d)
-    if(alertLog.length > 15) alertLog.pop()
-    document.getElementById('alertLog').innerHTML = alertLog.map(a => `
-      <div class="log-item">
-        <div class="log-dot" style="background:${levelColors[a.risk_level]}"></div>
+  document.getElementById('detailArea').innerHTML = `
+    <div class="det-header">
+      <div class="det-id-block">
+        <div class="det-av ${avClass(lvl)}">${initials(d.name || d.patient_id)}</div>
         <div>
-          <strong>${a.timestamp}</strong> — Risk ${Math.round(a.risk_score*100)}% [${a.risk_level}]<br>
-          <span style="color:#94a3b8">${a.recommended_action}</span>
+          <div class="det-name">${d.name || d.patient_id}</div>
+          <div class="det-meta">${d.patient_id} · Age ${d.age || '—'} · ${d.alert ? '🔴 Alert active' : '🟢 Monitoring'} · Updated ${d.timestamp || '—'}</div>
         </div>
-      </div>`).join('')
-  }
+      </div>
+      <span class="det-badge db-${lvl}">${lvl}</span>
+    </div>
 
-  if(d.reading_number >= d.total_readings){
-    document.getElementById('status').textContent = 'Monitoring complete — all readings played.'
-    document.getElementById('pauseBtn').disabled = true
-    document.getElementById('resumeBtn').disabled = true
+    <div class="risk-hero">
+      <div class="risk-score-block">
+        <div class="risk-score-num rn-${lvl} ${lvl === 'CRITICAL' ? 'pulsing' : ''}" id="riskNum">${sc}%</div>
+        <div class="risk-score-lbl">Deterioration Risk</div>
+      </div>
+      <div class="risk-right">
+        <div class="risk-bar-wrap">
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:6px">Risk Score Trend</div>
+          <div class="risk-bar-track"><div class="risk-bar-fill rbf-${lvl}" id="riskBar" style="width:${sc}%"></div></div>
+        </div>
+        <div class="action-strip as-${lvl}">
+          <span>${d.alert ? '⚡' : 'ℹ️'}</span>
+          <span>${d.recommended_action}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Live Vitals</div>
+        <div class="vitals-grid">${vboxes}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Risk Score Over Time</div>
+        <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Top Risk Factors — SHAP</div>
+        ${factorRows}
+      </div>
+      <div class="card">
+        <div class="card-title">Clinical Summary</div>
+        <div class="summary-text">${d.nurse_summary || '—'}</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">Alert History</div>
+      <div class="alert-log">${alertRows}</div>
+    </div>
+
+    <div class="report-btn-wrap">
+      <button class="btn btn-primary" id="reportBtn" onclick="downloadReport()">📄 Download PDF Report</button>
+    </div>`
+
+  // rebuild chart with existing data
+  if (chartData.labels.length) rebuildChart(
+    chartData.labels.map((l, i) => ({ label: l, score: chartData.scores[i] }))
+  )
+  // then fetch fresh from DB
+  if (d.patient_id) fetchTrend(d.patient_id)
+
+  // update chart live on new readings
+  if (d.reading_number !== undefined) {
+    chartData.labels.push(d.timestamp)
+    chartData.scores.push(sc)
+    rebuildChart(chartData.labels.map((l, i) => ({ label: l, score: chartData.scores[i] })))
   }
 }
 
-function updateChart(){
+function rebuildChart(points) {
   const ctx = document.getElementById('trendChart')
-  if(chart) chart.destroy()
+  if (!ctx) return
+  if (chart) chart.destroy()
   chart = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: chartData.labels,
+      labels: points.map(p => p.label),
       datasets: [{
-        label: 'Risk Score %',
-        data: chartData.scores,
-        borderColor: '#ef4444',
-        backgroundColor: 'rgba(239,68,68,0.08)',
+        data: points.map(p => p.score),
+        borderColor: '#C0392B',
+        backgroundColor: 'rgba(192,57,43,0.07)',
         borderWidth: 2,
         pointRadius: 3,
-        tension: 0.3,
+        pointBackgroundColor: '#C0392B',
+        tension: 0.4,
         fill: true
       }]
     },
@@ -283,105 +767,96 @@ function updateChart(){
       maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        y: { min: 0, max: 100, ticks: { callback: v => v + '%' } },
-        x: { ticks: { font: { size: 10 } } }
+        y: {
+          min: 0, max: 100,
+          grid: { color: '#F0F1F3' },
+          ticks: { font: { size: 10 }, color: '#8A94A6', callback: v => v + '%' }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 9 }, color: '#8A94A6', maxTicksLimit: 8 }
+        }
       }
     }
   })
 }
 
-async function loadPlayer(){
-  const fileInput = document.getElementById('fileInput')
-  if(!fileInput.files.length){
-    alert('Please choose a CSV file first')
-    return
-  }
+// Player controls
+function onFileChosen(e) {
+  const f = e.target.files[0]
+  const lbl = document.getElementById('fileLabel')
+  if (f) { lbl.textContent = f.name; lbl.className = 'chosen' }
+}
 
-  document.getElementById('status').textContent = 'Loading patient data...'
+async function loadPlayer() {
+  const fi = document.getElementById('fileInput')
+  if (!fi.files.length) { alert('Choose a CSV file first'); return }
+  document.getElementById('statusText').textContent = 'Loading...'
   document.getElementById('loadBtn').disabled = true
-
-  const formData = new FormData()
-  formData.append('file', fileInput.files[0])
-
+  const form = new FormData()
+  form.append('file', fi.files[0])
   try {
-    const res = await fetch('http://localhost:8000/player/load', { method: 'POST', body: formData })
-    const data = await res.json()
-
-    if(!res.ok) throw new Error(data.detail || 'Load failed')
-
-    document.getElementById('status').textContent =
-      `Monitoring started for ${data.patient_id} — ${data.total_readings} readings, one every ${data.interval_seconds}s`
-    document.getElementById('progressRow').style.display = 'flex'
-    document.getElementById('progressText').textContent = `Reading 0 / ${data.total_readings}`
-    document.getElementById('pauseBtn').disabled = false
-    document.getElementById('resetBtn').disabled = false
-
-    chartData.labels = []
-    chartData.scores = []
-
-  } catch(err){
-    document.getElementById('status').textContent = 'Error: ' + err.message
+    const r = await fetch('http://localhost:8000/player/load', { method: 'POST', body: form })
+    const d = await r.json()
+    if (!r.ok) throw new Error(d.detail || 'Load failed')
+    document.getElementById('statusText').textContent =
+      `Monitoring ${d.patient_id} — ${d.total_readings} readings @ ${d.interval_seconds}s`
+    document.getElementById('progressWrap').style.display = 'flex'
+    document.getElementById('progText').textContent = `0 / ${d.total_readings}`
+    document.getElementById('pauseBtn').disabled  = false
+    document.getElementById('resetBtn').disabled  = false
+    chartData.labels = []; chartData.scores = []
+  } catch (err) {
+    document.getElementById('statusText').textContent = 'Error: ' + err.message
     document.getElementById('loadBtn').disabled = false
   }
 }
 
-async function pausePlayer(){
+async function pausePlayer() {
   await fetch('http://localhost:8000/player/pause', { method: 'POST' })
-  document.getElementById('pauseBtn').disabled = true
+  document.getElementById('pauseBtn').disabled  = true
   document.getElementById('resumeBtn').disabled = false
-  document.getElementById('status').textContent = 'Monitoring paused.'
+  document.getElementById('statusText').textContent = 'Paused.'
 }
 
-async function resumePlayer(){
+async function resumePlayer() {
   await fetch('http://localhost:8000/player/resume', { method: 'POST' })
-  document.getElementById('pauseBtn').disabled = false
+  document.getElementById('pauseBtn').disabled  = false
   document.getElementById('resumeBtn').disabled = true
-  document.getElementById('status').textContent = 'Monitoring resumed.'
+  document.getElementById('statusText').textContent = 'Resumed.'
 }
 
-async function resetPlayer(){
+async function resetPlayer() {
   await fetch('http://localhost:8000/player/reset', { method: 'POST' })
-  document.getElementById('status').textContent = 'Player reset. Load a new CSV to start again.'
-  document.getElementById('loadBtn').disabled = false
-  document.getElementById('pauseBtn').disabled = true
+  document.getElementById('loadBtn').disabled   = false
+  document.getElementById('pauseBtn').disabled  = true
   document.getElementById('resumeBtn').disabled = true
-  document.getElementById('resetBtn').disabled = true
-  document.getElementById('progressRow').style.display = 'none'
-  document.getElementById('patientCard').style.display = 'none'
-  chartData.labels = []
-  chartData.scores = []
+  document.getElementById('resetBtn').disabled  = true
+  document.getElementById('progressWrap').style.display = 'none'
+  document.getElementById('statusText').textContent = 'Reset. Load a new CSV to start.'
+  chartData.labels = []; chartData.scores = []
 }
 
-async function downloadReport(){
-  if(!lastPatientId){
-    alert('No patient data yet')
-    return
-  }
+async function downloadReport() {
+  if (!lastPid) { alert('No patient loaded'); return }
   const btn = document.getElementById('reportBtn')
-  btn.disabled = true
-  btn.textContent = 'Generating report...'
-
+  btn.disabled = true; btn.textContent = 'Generating...'
   try {
-    const res = await fetch(`http://localhost:8000/report/${lastPatientId}`)
-    if(!res.ok) throw new Error('Report generation failed')
-
-    const blob = await res.blob()
+    const r = await fetch(`http://localhost:8000/report/${lastPid}`)
+    if (!r.ok) throw new Error('Report failed')
+    const blob = await r.blob()
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url
-    a.download = `PulseAlert_Report_${lastPatientId}.pdf`
-    a.click()
+    a.href = url; a.download = `PulseAlert_Report_${lastPid}.pdf`; a.click()
     URL.revokeObjectURL(url)
-  } catch(err){
-    alert('Error generating report: ' + err.message)
+  } catch (err) {
+    alert('Error: ' + err.message)
   } finally {
-    btn.disabled = false
-    btn.textContent = '📄 Download PDF Report'
+    btn.disabled = false; btn.textContent = '📄 Download PDF Report'
   }
 }
 
-connectWS()
+connect()
 </script>
-
 </body>
 </html>
