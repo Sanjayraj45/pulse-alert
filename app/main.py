@@ -60,7 +60,24 @@ async def websocket_endpoint(websocket: WebSocket):
         for p in patients:
             await websocket.send_text(json.dumps({
                 "type": "patient_update",
-                **p
+                "patient_id": str(p.get("patient_id", "")),
+                "name": str(p.get("patient_id", "")),
+                "age": p.get("age") or 0,
+                "risk_score": float(p.get("latest_risk") or p.get("risk_score") or 0),
+                "risk_level": str(p.get("latest_level") or p.get("risk_level") or "LOW"),
+                "alert": bool(p.get("latest_alert") or p.get("alert") or False),
+                "recommended_action": str(p.get("recommended_action") or ""),
+                "nurse_summary": "",
+                "top_risk_factors": [],
+                "timestamp": str(p.get("latest_time") or p.get("timestamp") or ""),
+                "vitals": {
+                    "heart_rate": float(p.get("heart_rate") or 0),
+                    "systolic_bp": float(p.get("systolic_bp") or 0),
+                    "spo2": float(p.get("spo2") or 0),
+                    "lactate": float(p.get("lactate") or 0),
+                    "resp_rate": float(p.get("resp_rate") or 0),
+                    "temperature": float(p.get("temperature") or 0)
+                }
             }, default=str))
         while True:
             await websocket.receive_text()
@@ -345,6 +362,55 @@ def player_resume():
 def player_reset():
     reset_player()
     return {"status": "reset"}
+
+
+# ─────────────────────────────────────────
+# Demo mode — server-side CSV loading
+# ─────────────────────────────────────────
+
+@app.post("/demo/start")
+def demo_start(scenario: str = "deterioration"):
+    """Load a pre-built demo scenario without needing a CSV upload"""
+    scenarios = {
+        "recovery":     "data/demo_recovery.csv",
+        "deterioration":"data/demo_deterioration.csv",
+        "crash":        "data/demo_crash.csv"
+    }
+    if scenario not in scenarios:
+        raise HTTPException(status_code=400, detail=f"Unknown scenario: {scenario}")
+
+    filepath = os.path.join(BASE_DIR, scenarios[scenario])
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail=f"Demo file not found: {filepath}")
+
+    try:
+        total_rows = load_csv_for_player(filepath)
+        return {
+            "status": "loaded",
+            "scenario": scenario,
+            "patient_id": player_state["patient_id"],
+            "total_readings": total_rows,
+            "interval_seconds": player_state["interval_seconds"]
+        }
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/clear/patients")
+def clear_all_patients():
+    """Wipe all patient data from DB for a clean demo"""
+    try:
+        conn = __import__('app.database', fromlist=['get_connection']).get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM predictions")
+        cursor.execute("DELETE FROM patients")
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return {"status": "cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/player/status")
 def player_status():
