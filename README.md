@@ -2,14 +2,6 @@
 
 > Real-time patient deterioration prediction for Intensive Care Units, powered by XGBoost and SHAP explainability.
 
-![Python](https://img.shields.io/badge/Python-3.14-blue?logo=python)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green?logo=fastapi)
-![XGBoost](https://img.shields.io/badge/XGBoost-AUC%200.887-orange)
-![MySQL](https://img.shields.io/badge/MySQL-8.0-blue?logo=mysql)
-![License](https://img.shields.io/badge/License-MIT-lightgrey)
-
----
-
 ## What It Does
 
 PulseAlert monitors ICU patients in real time and predicts their risk of deterioration before a crisis occurs. It ingests patient vitals, runs them through a trained XGBoost model, and broadcasts risk scores, SHAP-based factor explanations, and clinical recommendations to a live dashboard — updated every 5 seconds.
@@ -281,8 +273,8 @@ This system is a **clinical decision support tool**, not a diagnostic replacemen
 
 Built by SANJAY K C as a portfolio project demonstrating end-to-end ML engineering — from raw ICU data to a production-ready real-time monitoring system.
 
-- GitHub: [@yourusername](https://github.com/yourusername)
-- LinkedIn: [linkedin.com/in/yourprofile](https://linkedin.com/in/yourprofile)
+- GitHub: [@Sanjayraj45](https://github.com/Sanjayraj45)
+- LinkedIn:[@Sanjay Kc](https://www.linkedin.com/in/sanjay-kc-43b1022a2/)
 
 ---
 
