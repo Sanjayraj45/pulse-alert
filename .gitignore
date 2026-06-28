@@ -1,5 +1,34 @@
+# Virtual environment
 venv/
+
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Environment variables
 .env
+
+# Jupyter
 .ipynb_checkpoints/
+
+# Large data files — too big for GitHub
+data/training_v2.csv
+data/pulsealert_clean.csv
+data/X_test.pkl
+data/y_test.pkl
+data/_player_upload.csv
+
+# Trained model files — too big for GitHub
+models/*.pkl
+
+# MySQL data
+*.sql
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
